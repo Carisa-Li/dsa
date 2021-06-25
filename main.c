@@ -49,9 +49,11 @@ void init_token(int index,int begin,int type,int l,int hash){
 		set[index].token=(struct tokens *)realloc(set[index].token,5*set[index].size*sizeof(struct tokens));
 		set[index].size*=5;
 	}
-	if(type==0) strncpy(set[index].token[set[index].sum].word,mails[index].subject[begin],l+1);
-	else{strncpy(set[index].token[set[index].sum].word,mails[index].content[begin],l+1);}
+	set[index].token[set[index].sum].word=(char *)malloc((l+1)*sizeof(char));
+	if(type==0) strncpy(set[index].token[set[index].sum].word,mails[index].subject+begin,l+1);
+	else{strncpy(set[index].token[set[index].sum].word,mails[index].content+begin,l+1);}
 	set[index].token[set[index].sum].word[l]='\0';
+	set[index].token[set[index].sum].hash=hash;
 	set[index].sum++;
 }
 
@@ -105,7 +107,7 @@ void pre_processing_1(){
 				begin=i+1;
 			}
 		}
-		qsort(set[i].token,set[i].sum,sizeof(struct tokens_array),cmp_token);
+		qsort(set[i].token,set[i].sum,sizeof(struct tokens),cmp_token);
 	}
 }
 //pre-processing 1 end
@@ -156,7 +158,6 @@ void pre_processing_2(){
 
 int main(void) {
 	api.init(&n_mails, &n_queries, &mails, &queries);
-	
 	hash_max=82595483; //the max prime<(INT_MAX-26)/26
 	
 	pre_processing_1();
