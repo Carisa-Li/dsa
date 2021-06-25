@@ -36,6 +36,7 @@ struct tokens_array{
 struct tokens_array set[10000];
 
 //pre-processing 1 begin
+
 int cmp_token(const void *a,const void *b){
 	struct tokens *A=(struct tokens *)a;
 	struct tokens *B=(struct tokens *)b;
@@ -144,7 +145,7 @@ void init_person(int index,int mail,int type){
 void pre_processing_2(){
 	for(i=0;i<n_mails;i++){
 		init_person(2*i,i,0);
-		init_person(2*i,i,1);
+		init_person(2*i+1,i,1);
 	}
 	qsort(person,2*n_mails,sizeof(struct people),cmp_name);
 	struct people *now=&person[0];
@@ -156,23 +157,60 @@ void pre_processing_2(){
 }
 //pre-processing 2 end
 
+//subtask 3 begin
+struct people *find_set(struct people *p,int id){
+	if(p->query_id!=id){
+		p->query_id=id;
+		p->head=p;
+		p->size=1;
+		return p;
+	}
+	if(p->head!=p) p->head=find_set(p->head,id);
+	return p->head;
+}
+
 int main(void) {
 	api.init(&n_mails, &n_queries, &mails, &queries);
 	hash_max=82595483; //the max prime<(INT_MAX-26)/26
 	
 	pre_processing_1();
 	pre_processing_2();
-	int test[]={0};
+	
+	int ans[10000];
+	int ans_sum=0;
+	struct people *A,*B;
 	for(i=0;i<n_queries;i++){
 		if(queries[i].type==expression_match){  //subtask1 expression_match
-			api.answer(queries[i].id, NULL, 0);
+			//api.answer(queries[i].id, NULL, 0);
 		}
 		else if(queries[i].type==find_similar){  //subtask2 find_similar
-			api.answer(queries[i].id, NULL, 0);
+			//api.answer(queries[i].id, NULL, 0);
 		}
-		else{  //subtask3 group_analyse
-			api.answer(queries[i].id,test , 0);
+		else if(queries[i].type==group_analyse){  //subtask3 group_analyse
+			ans[0]=0;
+			ans[1]=0;
+			for(j=0;j<queries[i].data.group_analyse_data.len;j++){
+				A=To[queries[i].data.group_analyse_data.mids[j]];
+				B=From[queries[i].data.group_analyse_data.mids[j]];
+				A=find_set(A,queries[i].id);
+				B=find_set(B,queries[i].id);
+				if(A!=B){
+					if(A->size==1&&B->size==1) ans[0]++;
+					else if(A->size>1&&B->size>1) ans[0]--;
+					if(A->size>=B->size){
+						B->head=A;
+						A->size+=B->size;
+						if(A->size>ans[1]) ans[1]=A->size;
+					}
+					else{
+						A->head=B;
+						B->size+=A->size;
+						if(B->size>ans[1]) ans[1]=B->size;
+					}
+				}
+			}
+			api.answer(queries[i].id,ans,2);
 		}	
 	} 
-  return 0;
+	return 0;
 }
