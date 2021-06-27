@@ -1,3 +1,4 @@
+//ref:  https:ww.geeksforgeeks.org/union-and-intersection-of-two-sorted-arrays-2/ (感覺類似merge sort) 
 #include "api.h"
 #include <stdio.h>
 #include<stdlib.h>
@@ -7,15 +8,17 @@ int n_mails, n_queries;
 mail *mails;
 query *queries;
 
-int i,j;  //dev-c++ can not declare i,j in for loop
-int hash_max;
+int i,j,k;  //dev-c++ can not declare i,j in for loop
+unsigned long long int hash_max;
 int length; //used in for loop
+int ans_sum;
+int ans[10000];
 
 struct people{
 	char name[32];
 	int query_id;
 	int size;
-	int hash;
+	unsigned long long int hash;
 	int mail;
 	int type; //0 is to,1 is from
 	struct people *head;
@@ -25,13 +28,15 @@ struct people *To[10000],*From[10000];
 
 struct tokens{
 	char *word;
-	int hash;
+	unsigned long long int hash;
 };
 
 struct tokens_array{
 	struct tokens *token;
 	int sum;
 	int size; //size of token
+	double sim[10000];
+	int used;
 };
 struct tokens_array set[10000];
 
@@ -45,8 +50,8 @@ int cmp_token(const void *a,const void *b){
 	return strcmp(A->word,B->word);
 }
 
-void init_token(int index,int begin,int type,int l,int hash){
-	if(set[index].sum+1==set[index].size){
+void init_token(int index,int begin,int type,int l,unsigned long long int hash){
+	if(set[index].sum+1>=set[index].size){
 		set[index].token=(struct tokens *)realloc(set[index].token,5*set[index].size*sizeof(struct tokens));
 		set[index].size*=5;
 	}
@@ -59,11 +64,13 @@ void init_token(int index,int begin,int type,int l,int hash){
 }
 
 void pre_processing_1(){
-	int l,begin,hash;
+	int l,begin,n_re,cmp;
+	unsigned long long int hash;
 	for(i=0;i<n_mails;i++){
 		set[i].token=(struct tokens *)malloc(100*sizeof(struct tokens));
 		set[i].sum=0;
 		set[i].size=100;
+		set[i].used=0;
 		length=strlen(mails[i].subject);
 		l=0;
 		begin=0;
@@ -72,9 +79,9 @@ void pre_processing_1(){
 			if(isalnum(mails[i].subject[j])){
 				l++;
 				hash*=26;
-				if(isupper(mails[i].subject[j])) tolower(mails[i].subject[j]);
+				if(isupper(mails[i].subject[j])) mails[i].subject[j]=tolower(mails[i].subject[j]);
 				if(isdigit(mails[i].subject[j])) hash+=mails[i].subject[j]-'0';
-				if(islower(mails[i].subject[j])) hash+=mails[i].subject[j]-'a';
+				else if(islower(mails[i].subject[j])) hash+=mails[i].subject[j]-'a';
 				if(hash>=hash_max) hash%=hash_max;
 			}
 			else{
@@ -83,20 +90,18 @@ void pre_processing_1(){
 					l=0;
 					hash=0;
 				}
-				begin=i+1;
+				begin=j+1;
 			}
 		}
 		length=strlen(mails[i].content);
-		l=0;
-		begin=0;
-		hash=0;
+		l=begin=hash=n_re=0;
 		for(j=0;j<=length;j++){
 			if(isalnum(mails[i].content[j])){
 				l++;
 				hash*=26;
-				if(isupper(mails[i].content[j])) tolower(mails[i].content[j]);
+				if(isupper(mails[i].content[j])) mails[i].content[j]=tolower(mails[i].content[j]);
 				if(isdigit(mails[i].content[j])) hash+=mails[i].content[j]-'0';
-				if(islower(mails[i].content[j])) hash+=mails[i].content[j]-'a';
+				else if(islower(mails[i].content[j])) hash+=mails[i].content[j]-'a';
 				if(hash>=hash_max) hash%=hash_max;
 			}
 			else{
@@ -105,10 +110,16 @@ void pre_processing_1(){
 					l=0;
 					hash=0;
 				}
-				begin=i+1;
+				begin=j+1;
 			}
 		}
 		qsort(set[i].token,set[i].sum,sizeof(struct tokens),cmp_token);
+		for(j=1;j<set[i].sum;j++){
+			cmp=cmp_token(&set[i].token[j],&set[i].token[j-1]);
+			if(cmp==0) n_re+=1;
+			else if(n_re>0) set[i].token[j-n_re]=set[i].token[j];
+		}
+		set[i].sum=set[i].sum-n_re;
 	}
 }
 //pre-processing 1 end
@@ -168,25 +179,52 @@ struct people *find_set(struct people *p,int id){
 	if(p->head!=p) p->head=find_set(p->head,id);
 	return p->head;
 }
+//subtask 3 end
+
+//subtask 2 begin
+void similar(int index){
+	ans_sum=0;
+	int ptrA,ptrB,mid,index_ans;
+	mid=queries[index].data.find_similar_data.mid;
+	double similarity,cmp,A=(double)set[mid].sum,B,intersect,threshold;
+	for(j=0;j<n_mails;j++){ 
+		if(j==mid) continue;
+		if(set[j].used||set[mid].used){
+			similarity=set[mid].sim[j];
+		}
+		else{
+			ptrA=ptrB=intersect=0;
+			B=(double)set[j].sum;
+			while(ptrA<A&&ptrB<B){
+				cmp=cmp_token(&set[mid].token[ptrA],&set[j].token[ptrB]);
+				if(cmp>0) ptrB+=1;
+				else if(cmp<0) ptrA+=1;
+				else{
+					ptrA+=1;
+					ptrB+=1;
+					intersect+=1;
+				}
+			}
+			similarity=intersect/(A+B-intersect);
+			set[mid].sim[j]=similarity;
+			set[j].sim[mid]=similarity;
+		}
+		if(similarity>queries[index].data.find_similar_data.threshold) ans[ans_sum++]=j;
+	}
+	set[mid].used=1;
+}
+//subtask2 ends
 
 int main(void) {
 	api.init(&n_mails, &n_queries, &mails, &queries);
-	hash_max=82595483; //the max prime<(INT_MAX-26)/26
-	
+	hash_max=709490156681136557; //the max prime<(unsigned_long_long_int_MAX-26)/26
+	ans_sum=0;
+	struct people *A,*B;
 	pre_processing_1();
 	pre_processing_2();
 	
-	int ans[10000];
-	int ans_sum=0;
-	struct people *A,*B;
 	for(i=0;i<n_queries;i++){
-		if(queries[i].type==expression_match){  //subtask1 expression_match
-			//api.answer(queries[i].id, NULL, 0);
-		}
-		else if(queries[i].type==find_similar){  //subtask2 find_similar
-			//api.answer(queries[i].id, NULL, 0);
-		}
-		else if(queries[i].type==group_analyse){  //subtask3 group_analyse
+		if(queries[i].type==group_analyse){  //subtask3 group_analyse
 			ans[0]=0;
 			ans[1]=0;
 			for(j=0;j<queries[i].data.group_analyse_data.len;j++){
@@ -210,7 +248,13 @@ int main(void) {
 				}
 			}
 			api.answer(queries[i].id,ans,2);
-		}	
+		}
+	}
+	for(i=0;i<n_queries;i++){
+		if(queries[i].type==find_similar){  //subtask2 find_similar
+			similar(i); 
+			api.answer(queries[i].id, ans, ans_sum);
+		}
 	} 
 	return 0;
 }
